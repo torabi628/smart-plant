@@ -1,0 +1,132 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['README_FA.md', 'store/**']
+  workflow_dispatch:
+    inputs:
+      shots:
+        description: "Take store screenshots"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+
+      - name: Prepare signing key
+        env:
+          KS_B64: ${{ secrets.SP_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.SP_STORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.SP_KEY_ALIAS }}
+          KS_KEYPASS: ${{ secrets.SP_KEY_PASSWORD }}
+        run: |
+          set -e
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > smartplant-release.jks
+            printf "storeFile=smartplant-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n" "$KS_PASS" "$KS_ALIAS" "$KS_KEYPASS" > keystore.properties
+          elif git ls-remote --exit-code --heads origin sp-signing >/dev/null 2>&1; then
+            git fetch -q --depth 1 origin sp-signing
+            git show FETCH_HEAD:smartplant-release.jks > smartplant-release.jks
+            git show FETCH_HEAD:keystore.properties > keystore.properties
+          else
+            PASS=$(openssl rand -hex 12)
+            keytool -genkeypair -v -keystore smartplant-release.jks -alias smartplant -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$PASS" -keypass "$PASS" -dname "CN=Amin Smart Management Research Group, O=aminim.ir, C=IR"
+            printf "storeFile=smartplant-release.jks\nstorePassword=%s\nkeyAlias=smartplant\nkeyPassword=%s\n" "$PASS" "$PASS" > keystore.properties
+            mkdir -p /tmp/sig && cp smartplant-release.jks keystore.properties /tmp/sig/
+            cd /tmp/sig && git init -q -b sp-signing && git config user.name "github-actions" && git config user.email "actions@github.com"
+            git add -A && git commit -qm "release signing key (keep safe)"
+            git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sp-signing
+          fi
+
+      - name: Build
+        env:
+          SP_AI_URL: ${{ secrets.SP_AI_URL || secrets.SL_AI_URL }}
+          SP_AI_KEY: ${{ secrets.SP_AI_KEY || secrets.SL_AI_KEY }}
+          SP_AI_MODEL: ${{ secrets.SP_AI_MODEL || secrets.SL_AI_MODEL }}
+          SP_AVAL_KEY: ${{ secrets.SP_AVAL_KEY || secrets.SL_AVAL_KEY }}
+          SP_AVAL_MODEL: ${{ secrets.SP_AVAL_MODEL || secrets.SL_AVAL_MODEL }}
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          set -o pipefail
+          gradle assembleDebug assembleRelease --stacktrace 2>&1 | tee build.log
+
+      - name: Publish build log on failure
+        if: failure()
+        run: |
+          echo "========== ERRORS =========="
+          grep -E "^e: |error:|What went wrong|FAILED|Could not" -A4 build.log | head -150 || true
+          mkdir -p /tmp/log && cp build.log /tmp/log/ 2>/dev/null || echo "no log" > /tmp/log/build.log
+          grep -E "^e: |error:|What went wrong|Could not|FAILED" -A6 build.log > /tmp/log/errors.txt || true
+          cd /tmp/log && git init -q -b sp-ci-log && git config user.name "github-actions" && git config user.email "actions@github.com"
+          git add -A && git commit -qm "log ${GITHUB_SHA}" && git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sp-ci-log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartPlant-APK
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+
+      - name: Publish APKs to sp-apk branch
+        run: |
+          mkdir -p /tmp/out
+          cp app/build/outputs/apk/debug/*.apk /tmp/out/SmartPlant-debug.apk
+          cp app/build/outputs/apk/release/*.apk /tmp/out/SmartPlant-release.apk
+          ls -la /tmp/out
+          cd /tmp/out
+          git init -q -b sp-apk && git config user.name "github-actions" && git config user.email "actions@github.com"
+          git add -A && git commit -qm "APK from ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sp-apk
+
+  screenshots:
+    needs: build
+    if: contains(github.event.head_commit.message, '[shots]') || (github.event_name == 'workflow_dispatch' && inputs.shots)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: SmartPlant-APK
+          path: apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run emulator and capture
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash .github/shots.sh
+      - name: Publish screenshots branch
+        if: always()
+        run: |
+          mkdir -p /tmp/s && cp -r shots/* /tmp/s/ 2>/dev/null || true
+          cd /tmp/s
+          git init -q -b sp-shots && git config user.name "github-actions" && git config user.email "actions@github.com"
+          git add -A && git commit -qm "screenshots ${GITHUB_SHA}" || exit 0
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sp-shots
