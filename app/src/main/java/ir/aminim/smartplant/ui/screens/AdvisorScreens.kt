@@ -144,12 +144,13 @@ fun LightMeterScreen(vm: MainViewModel, onBack: () -> Unit, onPlant: (PlantInfo)
     var peak by remember { mutableFloatStateOf(0f) }
     DisposableEffect(sensor) {
         val l = object : SensorEventListener {
-            override fun onSensorChanged(e: SensorEvent) { lux = lux * 0.7f + e.values[0] * 0.3f; if (lux > peak) peak = lux }
+            override fun onSensorChanged(e: SensorEvent) { if (vm.demoLux != null) return; lux = lux * 0.7f + e.values[0] * 0.3f; if (lux > peak) peak = lux }
             override fun onAccuracyChanged(s: Sensor?, a: Int) {}
         }
         sensor?.let { sm.registerListener(l, it, SensorManager.SENSOR_DELAY_UI) }
         onDispose { sm.unregisterListener(l) }
     }
+    vm.demoLux?.let { lux = it; peak = it * 1.4f }
     val level = luxLevel(lux)
     val colors = listOf(Palette.TextMuted, Palette.Violet, Palette.Teal, Palette.Leaf, Palette.Gold)
     val anim by animateFloatAsState(((log10(lux.coerceAtLeast(1f)) / 5f).coerceIn(0f, 1f)), tween(400), label = "lux")
@@ -157,7 +158,7 @@ fun LightMeterScreen(vm: MainViewModel, onBack: () -> Unit, onPlant: (PlantInfo)
         Column(Modifier.fillMaxSize()) {
             TopBar("نورسنج گیاه", onBack, subtitle = "حسگر نور گوشی شما")
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (sensor == null) {
+                if (sensor == null && vm.demoLux == null) {
                     EmptyState(Icons.Rounded.SensorsOff, "این گوشی حسگر نور ندارد", "از جدول راهنمای نور در بخش آموزش استفاده کنید: فاصله تا پنجره و جهت آن را در نظر بگیرید.")
                 } else {
                     Spacer(Modifier.height(10.dp))

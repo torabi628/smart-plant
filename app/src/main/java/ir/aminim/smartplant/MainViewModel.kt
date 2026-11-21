@@ -322,23 +322,104 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /* ═══════════════  داده نمایشی برای تصاویر فروشگاه  ═══════════════ */
+    /* ═══════════════  داده نمایشی برای تصاویر فروشگاه (فقط نسخه آزمایشی)  ═══════════════ */
+    /** مقدار ثابت نورسنج در حالت نمایشی (شبیه‌ساز حسگر نور ندارد) */
+    var demoLux by mutableStateOf<Float?>(null)
+
+    private fun demoAsset(name: String): String? = runCatching {
+        val f = File(Images.photosDir(ctx), "demo_$name")
+        if (!f.exists()) ctx.assets.open("demo/$name").use { i -> f.outputStream().use { i.copyTo(it) } }
+        f.absolutePath
+    }.getOrNull()
+
     fun seedDemo() {
+        settings.userName = "علی صادقی"; settings.city = "تهران"; settings.onboarded = true
+        demoLux = 3240f
         if (diagnoses.isNotEmpty()) return
         val now = System.currentTimeMillis()
         val pothos = PlantDb.byId("pothos")!!
-        val d1 = PlantAi.offline((now - 3_600_000).toString(), now - 3_600_000, emptyList(), "برگ‌های پایینی پتوسم زرد شده و خاک همیشه خیسه، چند تا مگس ریز هم دور گلدونه",
-            setOf("yellow_old", "soil_wet", "gnats", "droop"), pothos).copy(engine = "هوش مصنوعی قوی داخلی", offline = false, confidence = 94,
-            alternatives = listOf(ir.aminim.smartplant.data.Alt("فیلودندرون قلبی", "Philodendron hederaceum", 4)))
-        val d2 = PlantAi.offline((now - 86_400_000).toString(), now - 86_400_000, emptyList(), "پشت برگ‌ها تار ریز دیدم و برگ‌ها خال‌خالی شده",
-            setOf("web", "stipple", "heater"), PlantDb.byId("areca")).copy(engine = "هوش مصنوعی قوی خارجی", offline = false, confidence = 88)
-        diagnoses.addAll(listOf(d1, d2))
+        val pImg = listOfNotNull(demoAsset("pothos.jpg"), demoAsset("pothos_leaf.jpg"))
+        val aImg = listOfNotNull(demoAsset("palm.jpg"))
+        val d1 = Diagnosis(
+            id = (now - 3_600_000).toString(), time = now - 3_600_000, images = pImg,
+            note = "از دو هفته پیش برگ‌های پایینی پتوس زرد شده، خاک همیشه خیسه و چند تا مگس ریز دور گلدون می‌چرخن",
+            engine = "هوش مصنوعی قوی داخلی", offline = false, isPlant = true,
+            plantFa = "پتوس طلایی", plantSci = "Epipremnum aureum", family = "شیپوریان (Araceae)", confidence = 96,
+            about = "رونده‌ای مقاوم و سریع‌الرشد با برگ‌های قلبی ابلق زرد و سبز؛ محبوب‌ترین گیاه آپارتمانی ایران.",
+            alternatives = listOf(ir.aminim.smartplant.data.Alt("فیلودندرون قلبی", "Philodendron hederaceum", 3)),
+            status = "moderate", healthScore = 58,
+            healthSummary = "زردی برگ‌های پایینی همراه با خاک خیس و مگس‌های ریز، نشانه آبیاری بیش از حد و آغاز آسیب به ریشه است. ساقه‌ها هنوز سفت‌اند و با اصلاح آبیاری گیاه کامل بهبود می‌یابد.",
+            problems = listOf(
+                ir.aminim.smartplant.data.Found(
+                    "آبیاری بیش از حد", "care", 88,
+                    "خاک همیشه مرطوب اکسیژن ریشه را قطع می‌کند؛ ریشه‌های ضعیف‌شده دیگر نمی‌توانند برگ‌های قدیمی را تغذیه کنند و این برگ‌ها زرد می‌شوند.",
+                    listOf("زردی یکنواخت برگ‌های پایینی", "خاک تیره و خیس در عکس", "پژمردگی خفیف با وجود رطوبت خاک"),
+                    listOf("آبیاری را تا خشک شدن ۳ سانتی‌متر بالای خاک قطع کنید.", "آب زیرگلدانی را خالی کنید.", "برگ‌های کاملاً زرد را با قیچی تمیز از ته ببرید.", "از زهکش گلدان ریشه‌ها را بررسی کنید؛ ریشه سالم سفید و سفت است."),
+                    listOf("خاک رویی را با کمی پرلیت مخلوط کنید تا هوادهی بهتر شود.", "گلدان را به جای روشن‌تر (کنار پنجره شرقی) ببرید تا خاک زودتر خشک شود."),
+                    emptyList(), "۲ تا ۴ هفته", "overwater",
+                ),
+                ir.aminim.smartplant.data.Found(
+                    "مگس قارچ (مگس خاک)", "pest", 74,
+                    "لارو این مگس‌های ریز در خاک همیشه مرطوب رشد می‌کند و به ریشه‌های ظریف آسیب می‌زند.",
+                    listOf("مگس‌های ریز سیاه دور گلدان"),
+                    listOf("کارت چسبنده زرد کنار گلدان بگذارید.", "اجازه دهید لایه رویی خاک کاملاً خشک شود."),
+                    listOf("آبیاری خاک با آب اکسیژنه ۳٪ رقیق (۱ قسمت با ۴ قسمت آب)، یک نوبت.", "یک لایه ۱ سانتی‌متری ماسه یا پرلیت روی خاک بریزید."),
+                    listOf("در آلودگی شدید: آبیاری خاک با حشره‌کش مناسب لارو طبق برچسب، با دستکش و دور از کودک و حیوان."),
+                    "۲ تا ۳ هفته", "fungus_gnat",
+                ),
+                ir.aminim.smartplant.data.Found(
+                    "پوسیدگی ریشه (در مراحل اولیه)", "disease", 31,
+                    "اگر خیسی خاک ادامه پیدا کند، قارچ‌های خاک‌زی ریشه‌های خفه‌شده را آلوده می‌کنند.",
+                    listOf("احتمال بوی ترش خاک"), listOf("اگر ریشه قهوه‌ای و له دیدید، بخش‌های پوسیده را ببرید و در خاک تازه بکارید."),
+                    listOf("پودر دارچین روی محل برش ریشه‌ها."), listOf("خیساندن ریشه در قارچ‌کش سیستمیک (مثل متالاکسیل) طبق برچسب."),
+                    "۳ تا ۶ هفته", "root_rot",
+                ),
+            ),
+            care = listOf(
+                "نور" to "نور متوسط تا زیاد غیرمستقیم؛ کنار پنجره شرقی ایده‌آل است.",
+                "آبیاری" to "وقتی ۲ تا ۳ سانتی‌متر رویی خاک خشک شد؛ در پاییز و زمستان حدود هر ۱۰ تا ۱۲ روز.",
+                "رطوبت" to "رطوبت معمولی خانه کافی است؛ از بخاری دور باشد.",
+                "دما" to "۱۵ تا ۳۰ درجه",
+                "خاک" to "خاک گلدانی سبک با ۳۰٪ پرلیت و گلدان سوراخ‌دار.",
+                "کوددهی" to "تا فروردین کود ندهید؛ در فصل رشد هر ۴ هفته کود متعادل با نصف غلظت.",
+            ),
+            prevention = listOf("قبل از هر آبیاری خشکی خاک را با انگشت بسنجید.", "گلدان متناسب با ریشه و دارای زهکش.", "در زمستان فاصله آبیاری را بیشتر کنید."),
+            toxicity = "سمی: اگزالات کلسیم دارد؛ دور از دسترس گربه، سگ و کودک نگه دارید.",
+            urgency = "طی همین هفته آبیاری را اصلاح کنید؛ ادامه خیسی خاک می‌تواند به پوسیدگی ریشه برسد.",
+            questions = emptyList(), tips = pothos.tips, plantId = "pothos",
+        )
+        val d2 = PlantAi.offline((now - 86_400_000).toString(), now - 86_400_000, aImg, "پشت برگ‌ها تار ریز دیدم و برگ‌ها خال‌خالی شده",
+            setOf("web", "stipple", "heater"), PlantDb.byId("areca")).copy(engine = "هوش مصنوعی قوی خارجی", offline = false, confidence = 91, healthScore = 46,
+            healthSummary = "تارهای ظریف و نقاط ریز روی برگ، نشانه آلودگی کنه تارعنکبوتی در هوای خشک کنار شوفاژ است.")
+        val d3 = PlantAi.offline((now - 3 * 86_400_000L).toString(), now - 3 * 86_400_000L, emptyList(), "", emptySet(), PlantDb.byId("snake"))
+            .copy(engine = "هوش مصنوعی قوی داخلی", offline = false, confidence = 97, status = "healthy", healthScore = 94, healthSummary = "گیاه سالم و شاداب است.")
+        diagnoses.addAll(listOf(d1, d2, d3))
+        val day = 86_400_000L
         garden.addAll(listOf(
-            newGardenPlant(pothos).copy(id = "g1", name = "پتوس پذیرایی", location = "کنار پنجره شرقی", lastWater = now - 8 * 86_400_000L, waterCount = 14),
-            newGardenPlant(PlantDb.byId("snake")).copy(id = "g2", name = "سانسوریا اتاق خواب", location = "اتاق خواب", lastWater = now - 5 * 86_400_000L, waterCount = 6),
-            newGardenPlant(PlantDb.byId("orchid")).copy(id = "g3", name = "ارکیده سفید", location = "میز ناهارخوری", lastWater = now - 2 * 86_400_000L, waterCount = 9),
+            newGardenPlant(pothos).copy(id = "g1", name = "پتوس پذیرایی", location = "کنار پنجره شرقی", photo = pImg.firstOrNull().orEmpty(), waterEvery = 10, lastWater = now - 10 * day, waterCount = 14),
+            newGardenPlant(PlantDb.byId("snake")).copy(id = "g2", name = "سانسوریا اتاق خواب", location = "اتاق خواب", lastWater = now - 9 * day, waterEvery = 21, waterCount = 6),
+            newGardenPlant(PlantDb.byId("orchid")).copy(id = "g3", name = "ارکیده سفید", location = "میز ناهارخوری", lastWater = now - 2 * day, waterEvery = 8, waterCount = 9),
+            newGardenPlant(PlantDb.byId("areca")).copy(id = "g4", name = "نخل آرکا", location = "سالن", photo = aImg.firstOrNull().orEmpty(), lastWater = now - 4 * day, waterEvery = 7, waterCount = 11),
         ))
         current = d1
+    }
+
+    /** گفتگوی نمونه برای تصویر فروشگاه */
+    fun demoChat() {
+        if (chat.isNotEmpty()) return
+        chat += ChatMsg("user", "پتوس می‌خواهم بخرم؛ چه شرایطی لازم دارد و موقع خرید به چی دقت کنم؟")
+        chat += ChatMsg("assistant", """**شرایط نگهداری پتوس**
+- **نور:** نور متوسط تا زیاد غیرمستقیم؛ در کم‌نور هم زنده می‌ماند ولی ابلقی برگ‌ها کم می‌شود.
+- **آبیاری:** وقتی ۲ تا ۳ سانتی‌متر رویی خاک خشک شد؛ از آب زیاد بیشتر آسیب می‌بیند.
+- **خاک:** خاک گلدانی سبک + پرلیت، گلدان حتماً سوراخ‌دار.
+
+**هنگام خرید**
+1. برگ‌های براق، بدون لکه زرد یا قهوه‌ای.
+2. پشت برگ‌ها را برای شپشک آردآلود و کنه بگردید.
+3. ساقه‌های پربرگ بهتر از ساقه‌های بلند و لخت است.
+
+⚠️ برای گربه و کودک سمی است؛ آن را آویز و دور از دسترس بگذارید.""")
+        chat += ChatMsg("user", "برای اتاق خوابم که نورش کمه چی پیشنهاد می‌کنی؟")
     }
 
     companion object { const val MAX_SHOTS = 4 }

@@ -164,15 +164,18 @@ private fun AppRoot(vm: MainViewModel, incoming: MainActivity.Incoming?, demo: S
                         "result" -> nav.navigate(Routes.RESULT)
                         "result_light" -> { onTheme("light"); nav.navigate(Routes.RESULT) }
                         "home_light" -> onTheme("light")
-                        "capture" -> { vm.newCapture(); vm.note = "از دو هفته پیش برگ‌های پایینی زرد شده و خاک همیشه خیس است"; vm.plantHint = "پتوس"; nav.navigate(Routes.CAPTURE) }
+                        "capture" -> { vm.newCapture(); vm.diagnoses.firstOrNull()?.images?.let { vm.shots.addAll(it) }; vm.note = "از دو هفته پیش برگ‌های پایینی زرد شده و خاک همیشه خیس است"; vm.plantHint = "پتوس"; nav.navigate(Routes.CAPTURE) }
                         "symptoms" -> { vm.symptomSel.addAll(listOf("yellow_old", "soil_wet", "gnats")); nav.navigate(Routes.SYMPTOMS) }
-                        "chat" -> nav.navigate(Routes.CHAT)
+                        "chat" -> { vm.startChat(null); vm.demoChat(); nav.navigate(Routes.CHAT) }
                         "library" -> nav.navigate(Routes.LIBRARY)
                         "plant" -> { ir.aminim.smartplant.knowledge.PlantDb.byId("monstera")?.let { openPlant(it) } }
                         "problem" -> openProblem("spider_mite")
                         "advisor" -> nav.navigate(Routes.ADVISOR)
                         "light" -> nav.navigate(Routes.LIGHT)
                         "garden" -> nav.navigate(Routes.GARDEN)
+                        "garden_light" -> { onTheme("light"); nav.navigate(Routes.GARDEN) }
+                        "plant_light" -> { onTheme("light"); ir.aminim.smartplant.knowledge.PlantDb.byId("monstera")?.let { openPlant(it) } }
+                        "result_problems" -> nav.navigate(Routes.RESULT)
                         "guides" -> nav.navigate(Routes.GUIDES)
                         "history" -> nav.navigate(Routes.HISTORY)
                         "settings" -> nav.navigate(Routes.SETTINGS)

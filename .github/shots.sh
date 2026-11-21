@@ -1,6 +1,5 @@
 #!/bin/bash
 # گرفتن اسکرین‌شات واقعی از برنامه روی شبیه‌ساز (برای کافه‌بازار)
-# نسخه ۱.۰ — گیاه‌شناس هوشمند
 set -x
 PKG=ir.aminim.smartplant
 APK=$(find apk -name "*debug*.apk" | head -1)
@@ -11,6 +10,7 @@ adb shell settings put global sysui_demo_allowed 1
 adb shell am broadcast -a com.android.systemui.demo -e command enter
 adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941
 adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false
+adb shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4
 adb shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false
 mkdir -p shots
 adb logcat -c
@@ -19,28 +19,28 @@ open() { adb shell am force-stop $PKG; sleep 1; adb shell am start -n $PKG/.Main
 up() { adb shell input swipe 540 1900 540 ${1:-600} 600; sleep 3; }
 
 open none 25; open none 12; shot 01_home
-up 500; shot 02_home_tools
-up 400; shot 03_home_recent
+up 700; shot 02_home_tools
 open drawer; shot 04_drawer
-open capture; shot 05_capture
-open result 12; shot 06_result
-up 300; shot 07_result_problems
-up 300; shot 08_result_treat
-open symptoms; shot 09_symptoms
-open chat; shot 10_chat
-open library; shot 11_library
-open plant; shot 12_plant
-up 300; shot 13_plant_more
-open problem; shot 14_problem
-open advisor; shot 15_advisor
-up 500; shot 16_advisor_picks
-open light; shot 17_light
+open capture 14; shot 05_capture
+open result 14; shot 06_result
+up 200; shot 07_result_health
+up 300; shot 08_result_problems
+up 300; shot 09_result_treat
+open symptoms; shot 10_symptoms
+open chat 12; shot 11_chat
+open library; shot 12_library
+open plant; shot 13_plant
+up 400; shot 14_plant_more
+open problem; shot 15_problem
+open advisor; up 1300; shot 16_advisor_picks
+open light 12; shot 17_light
 open garden; shot 18_garden
 open guides; shot 19_guides
-open settings; shot 20_settings
-open home_light; shot 21_home_light
-open result_light; shot 22_result_light
-open about; shot 23_about
-open onboard; shot 24_onboard
+open history; shot 20_history
+open settings; shot 21_settings
+open home_light; shot 22_home_light
+open result_light 14; shot 23_result_light
+open garden_light; shot 24_garden_light
+open plant_light; shot 25_plant_light
 adb logcat -d -s AndroidRuntime:E > shots/crash_log.txt || true
 ls -la shots
