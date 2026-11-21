@@ -1,0 +1,3 @@
+avalai: OK vision_answer='Green' keylen=51
+pollinations-large: OK vision_answer='Green' keylen=35
+pollinations: OK vision_answer='Green' keylen=35
