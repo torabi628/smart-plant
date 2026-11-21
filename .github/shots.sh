@@ -1,5 +1,6 @@
 #!/bin/bash
 # گرفتن اسکرین‌شات واقعی از برنامه روی شبیه‌ساز (برای کافه‌بازار)
+# نسخه ۱.۰ — گیاه‌شناس هوشمند
 set -x
 PKG=ir.aminim.smartplant
 APK=$(find apk -name "*debug*.apk" | head -1)
