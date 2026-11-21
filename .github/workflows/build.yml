@@ -78,6 +78,39 @@ jobs:
           cd /tmp/log && git init -q -b sp-ci-log && git config user.name "github-actions" && git config user.email "actions@github.com"
           git add -A && git commit -qm "log ${GITHUB_SHA}" && git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sp-ci-log
 
+      - name: AI key probe (status codes only)
+        if: always()
+        env:
+          AVAL_KEY: ${{ secrets.SP_AVAL_KEY || secrets.SL_AVAL_KEY }}
+          PO_KEY: ${{ secrets.SP_AI_KEY || secrets.SL_AI_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os, json, base64, struct, zlib, urllib.request
+          def png(w=64,h=64):
+              raw=b''.join(b'\x00'+bytes([40,160,60])*w for _ in range(h))
+              def ch(t,d): c=struct.pack('>I',len(d))+t+d; return c+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+              return b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+ch(b'IDAT',zlib.compress(raw))+ch(b'IEND',b'')
+          img='data:image/png;base64,'+base64.b64encode(png()).decode()
+          def test(name,url,key,model):
+              if not key: return f"{name}: NO_KEY"
+              body={"model":model,"max_tokens":40,"messages":[{"role":"user","content":[{"type":"text","text":"What color is this image? one word"},{"type":"image_url","image_url":{"url":img}}]}]}
+              if not model.startswith('openai'): body["temperature"]=0
+              else: body["max_tokens"]=1500
+              r=urllib.request.Request(url,json.dumps(body).encode(),{"Content-Type":"application/json","Authorization":"Bearer "+key})
+              try:
+                  with urllib.request.urlopen(r,timeout=120) as x:
+                      o=json.load(x); a=o["choices"][0]["message"]["content"]
+                      return f"{name}: OK vision_answer={a.strip()[:20]!r} keylen={len(key)}"
+              except urllib.error.HTTPError as e: return f"{name}: HTTP {e.code} {e.read()[:150]!r}"
+              except Exception as e: return f"{name}: ERR {type(e).__name__}"
+          out=[test("avalai","https://api.avalai.ir/v1/chat/completions",os.environ.get("AVAL_KEY","").strip(),"gpt-4.1"),
+               test("pollinations-large","https://gen.pollinations.ai/v1/chat/completions",os.environ.get("PO_KEY","").strip(),"openai-large"),
+               test("pollinations","https://gen.pollinations.ai/v1/chat/completions",os.environ.get("PO_KEY","").strip(),"openai")]
+          open("/tmp/probe.txt","w").write("\n".join(out)+"\n"); print("\n".join(out))
+          PY
+          mkdir -p /tmp/pr && cp /tmp/probe.txt /tmp/pr/ && cd /tmp/pr && git init -q -b sp-probe && git config user.name "github-actions" && git config user.email "actions@github.com"
+          git add -A && git commit -qm "probe ${GITHUB_SHA}" && git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sp-probe
+
       - uses: actions/upload-artifact@v4
         with:
           name: SmartPlant-APK
